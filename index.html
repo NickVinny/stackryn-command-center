@@ -221,8 +221,8 @@ function now(){return new Date().toISOString().slice(0,16).replace("T"," ")}
 function time(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
 function find(id){for(var i=0;i<chats.length;i++)if(chats[i].id===id)return chats[i];return null}
 function esc(s){if(!s)return"";var d=document.createElement("div");d.textContent=s;return d.innerHTML}
-function fmtMs(ms){var h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h+"h "+m+"m"}
-function fmtHrs(h){var totalMin=Math.round(h*60);var hh=Math.floor(totalMin/60),mm=totalMin%60;return hh+"h "+mm+"m"}
+function fmtMs(ms){if(ms<0)ms=0;var h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h+"h "+m+"m"}
+function fmtHrs(h){if(h<0)h=0;var totalMin=Math.round(h*60);var hh=Math.floor(totalMin/60),mm=totalMin%60;return hh+"h "+mm+"m"}
 
 function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove("show")},1800)}
 
@@ -374,7 +374,7 @@ function renderMetrics(){
   var s2='<div class="m-section breakdown"><div class="m-title">Time Per Chat</div>';
   if(agentData.length===0){s2+='<div style="font-size:.65rem;color:#333">No chats yet</div>'}
   else{
-    s2+='<table class="m-table"><thead><tr><th>Chat</th><th>Your Time</th><th>Human Est.</th></tr></thead><tbody>';
+    s2+='<table class="m-table"><thead><tr><th>Chat</th><th>Agent Time</th><th>Human Est.</th></tr></thead><tbody>';
     agentData.forEach(function(a){
       var dot=a.status==="running"?'color:#00b894':a.status==="completed"?'color:#636e72':'color:#fdcb6e';
       s2+='<tr><td class="t-name" style="'+dot+'">'+esc(a.name)+'</td>'+
