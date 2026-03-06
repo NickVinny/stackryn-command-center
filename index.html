@@ -275,7 +275,7 @@ function render(){
     // Elapsed time for this agent
     var startT=c.startedAt||new Date(c.created).getTime();
     var endT=c.completedAt||Date.now();
-    var elapsed=endT-startT;
+    var elapsed=Math.max(0,endT-startT);
     var elapsedHrs=elapsed/3600000;
     var ratio=c.humanHrs/Math.max(elapsedHrs,0.01);
 
@@ -351,7 +351,7 @@ function renderMetrics(){
     totalUQ+=unansweredCount(c);
     var startT=c.startedAt||new Date(c.created).getTime();
     var endT=c.completedAt||Date.now();
-    var elapsedMs=endT-startT;
+    var elapsedMs=Math.max(0,endT-startT);
     var elapsedHrs=elapsedMs/3600000;
     var humanHrs=c.humanHrs||8;
     agentData.push({name:c.name,status:c.status,elapsedMs:elapsedMs,elapsedHrs:elapsedHrs,humanHrs:humanHrs});
