@@ -98,27 +98,27 @@ header{background:#161822;border-bottom:1px solid #2a2d3a;padding:8px 16px;displ
 
 /* Metrics dashboard */
 .metrics{background:#161822;border-top:1px solid #2a2d3a;padding:10px 16px;flex-shrink:0;display:flex;gap:0;overflow-x:auto}
-.m-section{flex:1;min-width:0;padding:0 12px;border-right:1px solid #2a2d3a}
+.m-section{min-width:0;padding:0 14px;border-right:1px solid #2a2d3a}
 .m-section:last-child{border-right:none}
+.m-section.summary{flex:0 0 auto;min-width:220px}
+.m-section.breakdown{flex:1}
 .m-title{font-size:.62rem;color:#555;text-transform:uppercase;letter-spacing:.06em;font-weight:600;margin-bottom:6px}
 .m-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
 .m-label{font-size:.7rem;color:#888}
 .m-val{font-size:.82rem;font-weight:700;color:#e0e0e0;font-family:'Cascadia Code',monospace}
 .m-val.green{color:#6FA184}
 .m-val.yellow{color:#fdcb6e}
-.m-val.red{color:#d63363}
 .m-val.dim{color:#555}
-.m-bar{height:4px;background:#1e2030;border-radius:2px;margin-top:4px;overflow:hidden}
-.m-bar-fill{height:100%;border-radius:2px;transition:width .3s}
-.m-bar-fill.green{background:#6FA184}
-.m-bar-fill.yellow{background:#fdcb6e}
-.m-sub{font-size:.6rem;color:#444;margin-top:2px}
-.m-agents{display:flex;flex-direction:column;gap:4px}
-.m-agent{display:flex;align-items:center;gap:8px;font-size:.68rem}
-.m-agent .a-name{color:#aaa;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.m-agent .a-time{color:#6FA184;font-family:'Cascadia Code',monospace;font-size:.68rem;min-width:42px}
-.m-agent .a-human{color:#fdcb6e;font-family:'Cascadia Code',monospace;font-size:.68rem;min-width:42px}
-.m-agent .a-ratio{color:#555;font-size:.6rem}
+.m-sub{font-size:.58rem;color:#444;margin-top:2px}
+.m-table{width:100%;border-collapse:collapse}
+.m-table th{font-size:.58rem;color:#555;text-transform:uppercase;letter-spacing:.04em;font-weight:600;text-align:left;padding:0 6px 4px 0;border-bottom:1px solid #2a2d3a}
+.m-table th:not(:first-child){text-align:right}
+.m-table td{font-size:.7rem;padding:3px 6px 3px 0;border-bottom:1px solid #1e2030}
+.m-table td:not(:first-child){text-align:right;font-family:'Cascadia Code',monospace;font-size:.68rem}
+.m-table .t-name{color:#aaa;max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-table .t-yours{color:#e0e0e0;font-weight:600}
+.m-table .t-human{color:#6FA184}
+.m-table .t-total{color:#fdcb6e;font-weight:700;border-top:1px solid #2a2d3a;border-bottom:none;padding-top:5px}
 
 /* Config panel */
 .config-panel{display:none;position:fixed;top:44px;right:12px;background:#1e2030;border:1px solid #2a2d3a;border-radius:10px;padding:16px;z-index:150;width:380px;box-shadow:0 8px 32px #0008}
@@ -215,7 +215,7 @@ function save(){localStorage.setItem(KEY,JSON.stringify(chats))}
 function loadMetrics(){try{var m=JSON.parse(localStorage.getItem(MKEY));if(m&&m.date===todayStr())dayMetrics=m;else resetMetrics()}catch(e){resetMetrics()}}
 function saveMetrics(){dayMetrics.date=todayStr();localStorage.setItem(MKEY,JSON.stringify(dayMetrics))}
 function resetMetrics(){dayMetrics={date:todayStr(),moved_review:0,moved_done:0,session_start:null,total_work_ms:0,working:false};saveMetrics()}
-function todayStr(){return new Date().toISOString().slice(0,10)}
+function todayStr(){return new Date().toLocaleDateString("en-CA",{timeZone:"America/New_York"})}
 function gid(){return"c"+Date.now()+Math.random().toString(36).substr(2,4)}
 function now(){return new Date().toISOString().slice(0,16).replace("T"," ")}
 function time(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
@@ -343,61 +343,52 @@ function render(){
 function renderMetrics(){
   var el=document.getElementById("metrics");
   var totalAgents=chats.length;
-  var running=0,paused=0,done=0,totalMsgs=0,totalUQ=0;
   var agentData=[];
+  var totalUQ=0;
 
   chats.forEach(function(c){
     migrate(c);
-    if(c.status==="running")running++;
-    else if(c.status==="paused")paused++;
-    else if(c.status==="completed")done++;
-    totalMsgs+=c.messages?c.messages.length:0;
     totalUQ+=unansweredCount(c);
-
     var startT=c.startedAt||new Date(c.created).getTime();
     var endT=c.completedAt||Date.now();
     var elapsedMs=endT-startT;
     var elapsedHrs=elapsedMs/3600000;
     var humanHrs=c.humanHrs||8;
-    var ratio=humanHrs/Math.max(elapsedHrs,0.01);
-
-    agentData.push({name:c.name,status:c.status,elapsedMs:elapsedMs,elapsedHrs:elapsedHrs,humanHrs:humanHrs,ratio:ratio});
+    agentData.push({name:c.name,status:c.status,elapsedMs:elapsedMs,elapsedHrs:elapsedHrs,humanHrs:humanHrs});
   });
 
   var workMs=currentWorkMs();
   var totalHumanHrs=0,totalAgentHrs=0;
   agentData.forEach(function(a){totalHumanHrs+=a.humanHrs;totalAgentHrs+=a.elapsedHrs});
-  var overallRatio=totalHumanHrs/Math.max(totalAgentHrs,0.01);
 
-  // Section 1: Pipeline
-  var s1='<div class="m-section"><div class="m-title">Pipeline Today</div>'+
-    '<div class="m-row"><span class="m-label">In Progress &rarr; Review</span><span class="m-val green">'+dayMetrics.moved_review+'</span></div>'+
-    '<div class="m-row"><span class="m-label">Review &rarr; Done</span><span class="m-val green">'+dayMetrics.moved_done+'</span></div>'+
-    '<div class="m-row"><span class="m-label">Active / Total</span><span class="m-val">'+running+' / '+totalAgents+'</span></div>'+
-    '<div class="m-row"><span class="m-label">Needs Answer</span><span class="m-val'+(totalUQ>0?' yellow':' dim')+'">'+totalUQ+'</span></div></div>';
+  // Section 1: Your Day summary
+  var s1='<div class="m-section summary"><div class="m-title">Your Day (resets midnight EST)</div>'+
+    '<div class="m-row"><span class="m-label">Chats</span><span class="m-val">'+totalAgents+'</span></div>'+
+    '<div class="m-row"><span class="m-label">Your Time</span><span class="m-val">'+fmtMs(workMs)+'</span></div>'+
+    '<div class="m-row"><span class="m-label">Total Agent Time</span><span class="m-val">'+fmtHrs(totalAgentHrs)+'</span></div>'+
+    '<div class="m-row"><span class="m-label">Human Equivalent</span><span class="m-val green">'+fmtHrs(totalHumanHrs)+'</span></div>'+
+    (totalUQ>0?'<div class="m-row"><span class="m-label">Needs Answer</span><span class="m-val yellow">'+totalUQ+'</span></div>':'')+
+    '</div>';
 
-  // Section 2: Time
-  var s2='<div class="m-section"><div class="m-title">Time</div>'+
-    '<div class="m-row"><span class="m-label">Your Time Working</span><span class="m-val">'+fmtMs(workMs)+'</span></div>'+
-    '<div class="m-row"><span class="m-label">Total Agent Time</span><span class="m-val green">'+fmtHrs(totalAgentHrs)+'</span></div>'+
-    '<div class="m-row"><span class="m-label">Human Equiv. Saved</span><span class="m-val green">'+fmtHrs(totalHumanHrs)+'</span></div>'+
-    '<div class="m-row"><span class="m-label">Overall Multiplier</span><span class="m-val'+(overallRatio>=2?' green':' yellow')+'">'+overallRatio.toFixed(1)+'x</span></div>'+
-    '<div class="m-sub">Human equiv. / actual agent time</div></div>';
+  // Section 2: Per-chat breakdown table
+  var s2='<div class="m-section breakdown"><div class="m-title">Time Per Chat</div>';
+  if(agentData.length===0){s2+='<div style="font-size:.65rem;color:#333">No chats yet</div>'}
+  else{
+    s2+='<table class="m-table"><thead><tr><th>Chat</th><th>Your Time</th><th>Human Est.</th></tr></thead><tbody>';
+    agentData.forEach(function(a){
+      var dot=a.status==="running"?'color:#00b894':a.status==="completed"?'color:#636e72':'color:#fdcb6e';
+      s2+='<tr><td class="t-name" style="'+dot+'">'+esc(a.name)+'</td>'+
+        '<td class="t-yours">'+fmtHrs(a.elapsedHrs)+'</td>'+
+        '<td class="t-human">'+fmtHrs(a.humanHrs)+'</td></tr>';
+    });
+    s2+='<tr><td class="t-total">Total</td>'+
+      '<td class="t-total t-yours">'+fmtHrs(totalAgentHrs)+'</td>'+
+      '<td class="t-total t-human">'+fmtHrs(totalHumanHrs)+'</td></tr>';
+    s2+='</tbody></table>';
+  }
+  s2+='</div>';
 
-  // Section 3: Per-agent breakdown
-  var s3='<div class="m-section"><div class="m-title">Agent Efficiency</div><div class="m-agents">';
-  agentData.slice(0,6).forEach(function(a){
-    var dot=a.status==="running"?'style="color:#00b894"':a.status==="completed"?'style="color:#636e72"':'style="color:#fdcb6e"';
-    s3+='<div class="m-agent">'+
-      '<span class="a-name" '+dot+'>'+esc(a.name)+'</span>'+
-      '<span class="a-time">'+fmtHrs(a.elapsedHrs)+'</span>'+
-      '<span class="a-human">'+fmtHrs(a.humanHrs)+'</span>'+
-      '<span class="a-ratio">'+a.ratio.toFixed(1)+'x</span></div>';
-  });
-  if(agentData.length===0)s3+='<div style="font-size:.65rem;color:#333">No agents yet</div>';
-  s3+='</div><div class="m-sub" style="margin-top:4px">Agent Time | Human Est. | Multiplier</div></div>';
-
-  el.innerHTML=s1+s2+s3;
+  el.innerHTML=s1+s2;
 }
 
 // --- Quick add ---
