@@ -119,6 +119,22 @@ header{background:#161822;border-bottom:1px solid #2a2d3a;padding:8px 16px;displ
 .m-table .t-yours{color:#e0e0e0;font-weight:600}
 .m-table .t-human{color:#6FA184}
 .m-table .t-total{color:#fdcb6e;font-weight:700;border-top:1px solid #2a2d3a;border-bottom:none;padding-top:5px}
+.m-section.linear{flex:0 0 auto;min-width:260px;max-width:340px}
+.m-linear-list{display:flex;flex-direction:column;gap:3px;max-height:120px;overflow-y:auto}
+.m-li{display:flex;align-items:center;gap:6px;font-size:.66rem}
+.m-li .li-id{color:#6FA184;font-family:'Cascadia Code',monospace;min-width:62px;font-size:.62rem}
+.m-li .li-title{color:#aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-li .li-state{font-size:.55rem;padding:1px 5px;border-radius:3px;white-space:nowrap;font-weight:600}
+.li-state.in-review{background:#fdcb6e22;color:#fdcb6e}
+.li-state.done{background:#6FA18422;color:#6FA184}
+.li-state.in-progress{background:#74b9ff22;color:#74b9ff}
+.li-state.other{background:#2a2d3a;color:#666}
+.m-linear-summary{display:flex;gap:12px;margin-bottom:6px}
+.m-ls{text-align:center}
+.m-ls .ls-num{font-size:.9rem;font-weight:700;font-family:'Cascadia Code',monospace}
+.m-ls .ls-label{font-size:.55rem;color:#555;text-transform:uppercase}
+.m-linear-err{font-size:.62rem;color:#d63363;margin-top:4px}
+.m-linear-loading{font-size:.62rem;color:#555;font-style:italic}
 
 /* Config panel */
 .config-panel{display:none;position:fixed;top:44px;right:12px;background:#1e2030;border:1px solid #2a2d3a;border-radius:10px;padding:16px;z-index:150;width:380px;box-shadow:0 8px 32px #0008}
@@ -169,11 +185,14 @@ header{background:#161822;border-bottom:1px solid #2a2d3a;padding:8px 16px;displ
 </header>
 
 <div class="config-panel" id="config-panel">
-  <h3>Live Feed</h3>
+  <h3>Settings</h3>
   <label>ntfy.sh Topic</label>
   <input type="text" id="cfg-topic" value="stackryn-cc-nick"/>
   <label style="margin-top:10px">Push from terminal:</label>
   <div class="helper-box" id="helper-cmd"><span class="ch">copy</span>curl -d "ChatName|Question" ntfy.sh/<span id="helper-topic">stackryn-cc-nick</span></div>
+  <label style="margin-top:12px">Linear API Key</label>
+  <input type="password" id="cfg-linear" placeholder="lin_api_..."/>
+  <div class="helper-note">Enables ticket activity in metrics. Stored in localStorage only.</div>
   <div class="cfg-row">
     <button class="cfg-cancel" id="cfg-cancel">Cancel</button>
     <button class="cfg-save" id="cfg-save">Save &amp; Connect</button>
@@ -404,7 +423,8 @@ function renderMetrics(){
   }
   s2+='</div>';
 
-  el.innerHTML=s1+s2;
+  var s3=renderLinearSection();
+  el.innerHTML=s1+s2+s3;
 }
 
 // --- Quick add ---
@@ -433,19 +453,88 @@ function connectNtfy(){disconnectNtfy();if(!ntfyTopic){updateLiveUI();return}evt
 function disconnectNtfy(){if(evtSource){evtSource.close();evtSource=null}updateLiveUI()}
 function handleIncoming(raw){markActive();var parts=raw.split("|"),chatName,qText;if(parts.length>=2){chatName=parts[0].trim();qText=parts.slice(1).join("|").trim()}else{chatName=null;qText=raw.trim()}if(!qText)return;var target=null;if(chatName){var lower=chatName.toLowerCase();for(var i=0;i<chats.length;i++)if(chats[i].name.toLowerCase()===lower){target=chats[i];break}if(!target)for(var i=0;i<chats.length;i++)if(chats[i].name.toLowerCase().indexOf(lower)!==-1){target=chats[i];break}if(!target){target={id:gid(),name:chatName,category:"feature",status:"running",created:now(),updated:now(),messages:[],humanHrs:8,startedAt:Date.now()};chats.unshift(target)}}else{for(var i=0;i<chats.length;i++)if(chats[i].status==="running"){target=chats[i];break}if(!target){target={id:gid(),name:"Incoming",category:"feature",status:"running",created:now(),updated:now(),messages:[],humanHrs:8,startedAt:Date.now()};chats.unshift(target)}}migrate(target);target.messages.push({id:gid(),type:"question",text:qText,time:time()});target.updated=now();inputModes[target.id]="answer";save();render();toast("New Q: "+target.name);checkAutoTimer();try{var ctx=new(window.AudioContext||window.webkitAudioContext)(),osc=ctx.createOscillator(),g=ctx.createGain();osc.connect(g);g.connect(ctx.destination);osc.frequency.value=880;osc.type="sine";g.gain.value=.15;osc.start();g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.3);osc.stop(ctx.currentTime+.3)}catch(e){}}
 
+// =============================================
+// LINEAR INTEGRATION
+// =============================================
+var LINEAR_KEY_STORE="stackryn_cc_linear",linearApiKey="",linearData=null,linearLoading=false,linearError="";
+function loadLinearKey(){linearApiKey=localStorage.getItem(LINEAR_KEY_STORE)||""}
+function saveLinearKey(){localStorage.setItem(LINEAR_KEY_STORE,linearApiKey)}
+
+function fetchLinearActivity(){
+  if(!linearApiKey){linearData=null;renderMetrics();return}
+  linearLoading=true;linearError="";renderMetrics();
+  // Get today's date at midnight EST as ISO string
+  var estNow=new Date(new Date().toLocaleString("en-US",{timeZone:"America/New_York"}));
+  estNow.setHours(0,0,0,0);
+  var sinceISO=new Date(estNow).toISOString();
+  var q='{ issues(filter: { updatedAt: { gte: "'+sinceISO+'" } }, first: 100) { nodes { identifier title state { name } updatedAt } } }';
+  fetch("https://api.linear.app/graphql",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":linearApiKey},
+    body:JSON.stringify({query:q})
+  }).then(function(r){return r.json()}).then(function(d){
+    linearLoading=false;
+    if(d.errors){linearError=d.errors[0].message;linearData=null;renderMetrics();return}
+    var issues=d.data&&d.data.issues?d.data.issues.nodes:[];
+    // Categorize by current state
+    var inReview=[],done=[],inProgress=[],other=[];
+    issues.forEach(function(iss){
+      var s=(iss.state&&iss.state.name||"").toLowerCase();
+      if(s==="in review"||s==="review")inReview.push(iss);
+      else if(s==="done"||s==="completed")done.push(iss);
+      else if(s==="in progress")inProgress.push(iss);
+      else other.push(iss);
+    });
+    linearData={inReview:inReview,done:done,inProgress:inProgress,other:other,total:issues.length};
+    renderMetrics()
+  }).catch(function(e){linearLoading=false;linearError=e.message;linearData=null;renderMetrics()})
+}
+
+function renderLinearSection(){
+  if(!linearApiKey)return'<div class="m-section linear"><div class="m-title">Linear Activity</div><div class="m-linear-err">Add API key in settings</div></div>';
+  if(linearLoading)return'<div class="m-section linear"><div class="m-title">Linear Activity</div><div class="m-linear-loading">Loading...</div></div>';
+  if(linearError)return'<div class="m-section linear"><div class="m-title">Linear Activity</div><div class="m-linear-err">'+esc(linearError)+'</div></div>';
+  if(!linearData)return'<div class="m-section linear"><div class="m-title">Linear Activity</div><div style="font-size:.62rem;color:#333">No data</div></div>';
+
+  var ld=linearData;
+  var h='<div class="m-section linear"><div class="m-title">Linear Activity Today</div>';
+
+  // Summary counts
+  h+='<div class="m-linear-summary">';
+  h+='<div class="m-ls"><div class="ls-num" style="color:#74b9ff">'+ld.inProgress.length+'</div><div class="ls-label">In Progress</div></div>';
+  h+='<div class="m-ls"><div class="ls-num" style="color:#fdcb6e">'+ld.inReview.length+'</div><div class="ls-label">In Review</div></div>';
+  h+='<div class="m-ls"><div class="ls-num" style="color:#6FA184">'+ld.done.length+'</div><div class="ls-label">Done</div></div>';
+  h+='<div class="m-ls"><div class="ls-num" style="color:#888">'+ld.total+'</div><div class="ls-label">Touched</div></div>';
+  h+='</div>';
+
+  // List notable items (in-review + done first, then in-progress)
+  h+='<div class="m-linear-list">';
+  var items=[].concat(ld.done,ld.inReview,ld.inProgress).slice(0,12);
+  items.forEach(function(iss){
+    var s=(iss.state&&iss.state.name||"").toLowerCase();
+    var cls=s==="done"||s==="completed"?"done":s==="in review"||s==="review"?"in-review":s==="in progress"?"in-progress":"other";
+    h+='<div class="m-li"><span class="li-id">'+esc(iss.identifier)+'</span><span class="li-state '+cls+'">'+esc(iss.state.name)+'</span><span class="li-title">'+esc(iss.title)+'</span></div>';
+  });
+  if(items.length===0)h+='<div style="font-size:.62rem;color:#333">No activity today</div>';
+  h+='</div></div>';
+  return h;
+}
+
 // Config panel
-document.getElementById("live-toggle").onclick=function(){var p=document.getElementById("config-panel");p.classList.toggle("open");if(p.classList.contains("open")){document.getElementById("cfg-topic").value=ntfyTopic||"stackryn-cc-nick";document.getElementById("helper-topic").textContent=ntfyTopic||"stackryn-cc-nick"}};
+document.getElementById("live-toggle").onclick=function(){var p=document.getElementById("config-panel");p.classList.toggle("open");if(p.classList.contains("open")){document.getElementById("cfg-topic").value=ntfyTopic||"stackryn-cc-nick";document.getElementById("helper-topic").textContent=ntfyTopic||"stackryn-cc-nick";document.getElementById("cfg-linear").value=linearApiKey||""}};
 document.getElementById("cfg-topic").oninput=function(){document.getElementById("helper-topic").textContent=this.value.trim()||"your-topic"};
-document.getElementById("cfg-save").onclick=function(){ntfyTopic=document.getElementById("cfg-topic").value.trim();saveNtfy();document.getElementById("config-panel").classList.remove("open");connectNtfy()};
+document.getElementById("cfg-save").onclick=function(){ntfyTopic=document.getElementById("cfg-topic").value.trim();saveNtfy();linearApiKey=document.getElementById("cfg-linear").value.trim();saveLinearKey();document.getElementById("config-panel").classList.remove("open");connectNtfy();fetchLinearActivity()};
 document.getElementById("cfg-cancel").onclick=function(){document.getElementById("config-panel").classList.remove("open")};
 document.getElementById("helper-cmd").onclick=function(){copyText('curl -d "ChatName|Question" ntfy.sh/'+(ntfyTopic||"your-topic"))};
 document.addEventListener("click",function(e){var p=document.getElementById("config-panel"),t=document.getElementById("live-toggle");if(p.classList.contains("open")&&!p.contains(e.target)&&!t.contains(e.target))p.classList.remove("open")});
 
 // --- Init ---
-load();loadMetrics();loadNtfy();
+load();loadMetrics();loadNtfy();loadLinearKey();
 if(!ntfyTopic){var dt=document.getElementById("cfg-topic").value.trim();if(dt){ntfyTopic=dt;saveNtfy()}}
 markActive();render();
 if(ntfyTopic)connectNtfy();
+if(linearApiKey)fetchLinearActivity();
+setInterval(function(){if(linearApiKey)fetchLinearActivity()},300000); // refresh Linear every 5min
 </script>
 </body>
 </html>
