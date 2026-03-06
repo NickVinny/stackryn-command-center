@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Stackryn Command Center</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; }
+
+header { background: #161822; border-bottom: 1px solid #2a2d3a; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+.logo h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: .04em; color: #fff; }
+.logo h1 span { color: #6c5ce7; }
+.logo .subtitle { font-size: .75rem; color: #666; margin-top: 2px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.header-right .clock { font-size: .78rem; color: #555; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+.header-right .clear-all { background: none; border: 1px solid #d6336344; color: #d63363; border-radius: 6px; padding: 5px 12px; font-size: .72rem; cursor: pointer; }
+.header-right .clear-all:hover { background: #d6336322; }
+
+/* Quick-add bar */
+.quick-add { background: #161822; border-bottom: 1px solid #2a2d3a; padding: 12px 24px; display: flex; gap: 10px; align-items: center; }
+.quick-add input { flex: 1; background: #1e2030; border: 1px solid #2a2d3a; border-radius: 8px; padding: 10px 14px; color: #e0e0e0; font-size: .88rem; outline: none; }
+.quick-add input:focus { border-color: #6c5ce7; }
+.quick-add input::placeholder { color: #555; }
+.quick-add select { background: #1e2030; border: 1px solid #2a2d3a; border-radius: 8px; padding: 10px 12px; color: #aaa; font-size: .82rem; outline: none; cursor: pointer; }
+.quick-add select:focus { border-color: #6c5ce7; }
+.quick-add .add-btn { background: #6c5ce7; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: .88rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.quick-add .add-btn:hover { background: #5a4bd1; }
+
+/* Filter row */
+.filters { padding: 12px 24px 0; display: flex; gap: 8px; align-items: center; }
+.filters .f-btn { background: none; border: 1px solid #2a2d3a; color: #666; border-radius: 6px; padding: 5px 14px; font-size: .75rem; cursor: pointer; transition: all .15s; }
+.filters .f-btn:hover { border-color: #6c5ce7; color: #6c5ce7; }
+.filters .f-btn.active { border-color: #6c5ce7; color: #6c5ce7; background: #6c5ce711; }
+.filters .f-count { font-size: .68rem; color: #444; margin-left: auto; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+
+/* Card grid */
+.board { padding: 16px 24px 24px; display: flex; flex-direction: column; gap: 8px; }
+
+.card { background: #161822; border: 1px solid #2a2d3a; border-radius: 12px; padding: 0; transition: border-color .15s; overflow: hidden; }
+.card:hover { border-color: #363a4a; }
+.card.expanded .card-detail { display: block; }
+
+.card-main { display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; }
+.card-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; cursor: pointer; transition: all .15s; border: 2px solid transparent; }
+.card-status-dot:hover { transform: scale(1.3); }
+.card-status-dot.running { background: #00b894; box-shadow: 0 0 6px #00b89466; }
+.card-status-dot.paused { background: #fdcb6e; box-shadow: 0 0 6px #fdcb6e66; }
+.card-status-dot.completed { background: #636e72; }
+.card-status-dot.error { background: #d63363; box-shadow: 0 0 6px #d6336366; }
+
+.card-info { flex: 1; min-width: 0; }
+.card-name { font-size: .9rem; font-weight: 600; color: #e0e0e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-meta { font-size: .7rem; color: #555; margin-top: 2px; display: flex; gap: 10px; }
+.card-meta .cat { color: #6c5ce7; }
+
+.card-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+.card-actions button { background: none; border: none; color: #555; cursor: pointer; padding: 4px 8px; border-radius: 4px; font-size: .82rem; transition: all .12s; }
+.card-actions button:hover { background: #2a2d3a; color: #e0e0e0; }
+.card-actions .btn-remove { color: #d6336366; }
+.card-actions .btn-remove:hover { color: #d63363; background: #d6336322; }
+.card-actions .status-badge { font-size: .62rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; cursor: pointer; border: none; }
+.status-badge.running { background: #00b89422; color: #00b894; }
+.status-badge.paused { background: #fdcb6e22; color: #fdcb6e; }
+.status-badge.completed { background: #636e7222; color: #636e72; }
+.status-badge.error { background: #d6336322; color: #d63363; }
+
+/* Card detail (expanded) */
+.card-detail { display: none; border-top: 1px solid #2a2d3a; padding: 12px 16px; background: #12141e; }
+.card-detail .detail-desc { font-size: .78rem; color: #888; margin-bottom: 10px; line-height: 1.4; }
+.card-detail .detail-desc:empty { display: none; }
+
+.log-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; margin-bottom: 10px; }
+.log-item { display: flex; gap: 8px; font-size: .76rem; font-family: 'Cascadia Code', 'Fira Code', monospace; line-height: 1.4; }
+.log-item .lt { color: #444; min-width: 44px; flex-shrink: 0; }
+.log-item .ltag { font-weight: 600; min-width: 52px; flex-shrink: 0; }
+.ltag.tool { color: #0984e3; }
+.ltag.output { color: #00b894; }
+.ltag.thinking { color: #a29bfe; }
+.ltag.error { color: #d63363; }
+.ltag.user { color: #fdcb6e; }
+.ltag.file { color: #e17a2e; }
+.log-item .ltext { color: #999; }
+
+.detail-input { display: flex; gap: 8px; }
+.detail-input input { flex: 1; background: #1e2030; border: 1px solid #2a2d3a; border-radius: 6px; padding: 8px 10px; color: #e0e0e0; font-size: .8rem; outline: none; font-family: inherit; }
+.detail-input input:focus { border-color: #6c5ce7; }
+.detail-input button { background: #6c5ce7; color: #fff; border: none; border-radius: 6px; padding: 8px 14px; font-size: .8rem; cursor: pointer; }
+.detail-input button:hover { background: #5a4bd1; }
+
+.detail-actions { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #2a2d3a22; }
+.detail-actions button { background: #2a2d3a; color: #aaa; border: none; border-radius: 6px; padding: 6px 12px; font-size: .72rem; cursor: pointer; }
+.detail-actions button:hover { background: #363a4a; color: #fff; }
+.detail-actions .da-danger { color: #d63363; }
+.detail-actions .da-danger:hover { background: #d6336322; }
+
+/* Empty state */
+.empty { padding: 60px 24px; text-align: center; color: #333; }
+.empty .e-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: .4; }
+.empty .e-title { font-size: .95rem; color: #555; margin-bottom: 6px; }
+.empty .e-sub { font-size: .78rem; color: #444; max-width: 400px; margin: 0 auto; line-height: 1.5; }
+
+/* Stats bar */
+.stats { background: #161822; border-top: 1px solid #2a2d3a; padding: 8px 24px; display: flex; gap: 24px; font-size: .72rem; color: #444; position: fixed; bottom: 0; left: 0; right: 0; }
+.stats .sv { color: #888; font-weight: 600; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #363a4a; }
+
+/* Toast */
+.toast { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); background: #6c5ce7; color: #fff; padding: 8px 20px; border-radius: 8px; font-size: .8rem; font-weight: 600; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 200; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <h1><span>Stackryn</span> Command Center</h1>
+    <div class="subtitle">Development Chat Management</div>
+  </div>
+  <div class="header-right">
+    <span class="clock" id="clock"></span>
+    <button class="clear-all" id="clear-all-btn">Clear All</button>
+  </div>
+</header>
+
+<div class="quick-add">
+  <input type="text" id="qa-name" placeholder="Chat name - type and hit Enter to add..." autofocus/>
+  <select id="qa-cat">
+    <option value="feature">Feature</option>
+    <option value="bugfix">Bug Fix</option>
+    <option value="migration">Migration</option>
+    <option value="refactor">Refactor</option>
+    <option value="infra">Infra</option>
+    <option value="test">Test</option>
+  </select>
+  <button class="add-btn" id="qa-btn">+ Add Chat</button>
+</div>
+
+<div class="filters" id="filters">
+  <button class="f-btn active" data-f="all">All</button>
+  <button class="f-btn" data-f="running">Running</button>
+  <button class="f-btn" data-f="paused">Paused</button>
+  <button class="f-btn" data-f="completed">Done</button>
+  <button class="f-btn" data-f="error">Error</button>
+  <span class="f-count" id="f-count"></span>
+</div>
+
+<div class="board" id="board"></div>
+
+<div class="stats">
+  <span>Total: <span class="sv" id="s-total">0</span></span>
+  <span>Running: <span class="sv" id="s-run">0</span></span>
+  <span>Paused: <span class="sv" id="s-pause">0</span></span>
+  <span>Done: <span class="sv" id="s-done">0</span></span>
+  <span>Entries: <span class="sv" id="s-entries">0</span></span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var KEY = "stackryn_cc";
+var chats = [];
+var filter = "all";
+var expandedId = null;
+
+var STATUS_CYCLE = ["running", "paused", "completed", "error"];
+
+function load() { try { chats = JSON.parse(localStorage.getItem(KEY)) || []; } catch(e) { chats = []; } }
+function save() { localStorage.setItem(KEY, JSON.stringify(chats)); }
+function id() { return "c" + Date.now() + Math.random().toString(36).substr(2,4); }
+function now() { return new Date().toISOString().slice(0,16).replace("T"," "); }
+function time() { return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
+function find(cid) { for(var i=0;i<chats.length;i++) if(chats[i].id===cid) return chats[i]; return null; }
+function esc(s) { if(!s) return ""; var d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
+
+function toast(msg) {
+  var t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._t);
+  t._t = setTimeout(function(){ t.classList.remove("show"); }, 1800);
+}
+
+// --- Add chat ---
+function addChat(name, category) {
+  if (!name) return;
+  var c = { id: id(), name: name, category: category || "feature", description: "", status: "running", created: now(), updated: now(), log: [] };
+  chats.unshift(c);
+  save();
+  expandedId = c.id;
+  render();
+  toast("Added: " + name);
+}
+
+// --- Remove chat ---
+function removeChat(cid) {
+  chats = chats.filter(function(c){ return c.id !== cid; });
+  if (expandedId === cid) expandedId = null;
+  save();
+  render();
+  toast("Chat removed");
+}
+
+// --- Cycle status ---
+function cycleStatus(cid) {
+  var c = find(cid);
+  if (!c) return;
+  var i = STATUS_CYCLE.indexOf(c.status);
+  c.status = STATUS_CYCLE[(i+1) % STATUS_CYCLE.length];
+  c.updated = now();
+  save();
+  render();
+}
+
+// --- Add log entry ---
+function addLog(cid, raw) {
+  var c = find(cid);
+  if (!c || !raw) return;
+  var tag = "output", text = raw;
+  var m = raw.match(/^(tool|output|thinking|error|user|file):\s*/i);
+  if (m) { tag = m[1].toLowerCase(); text = raw.slice(m[0].length); }
+  c.log.push({ t: time(), tag: tag, text: text });
+  c.updated = now();
+  save();
+  render();
+}
+
+// --- Export ---
+function exportChat(cid) {
+  var c = find(cid);
+  if (!c) return;
+  var lines = ["# " + c.name, "Category: " + c.category, "Status: " + c.status, "Created: " + c.created, "Updated: " + c.updated, "", c.description || "", "", "## Log"];
+  c.log.forEach(function(l){ lines.push("[" + l.t + "] [" + l.tag.toUpperCase() + "] " + l.text); });
+  var blob = new Blob([lines.join("\n")], {type:"text/markdown"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = c.name.replace(/[^a-z0-9]/gi,"_").toLowerCase() + ".md";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// --- Duplicate ---
+function dupeChat(cid) {
+  var c = find(cid);
+  if (!c) return;
+  var n = { id: id(), name: c.name + " (copy)", category: c.category, description: c.description, status: "running", created: now(), updated: now(), log: [] };
+  chats.unshift(n);
+  save();
+  expandedId = n.id;
+  render();
+  toast("Duplicated");
+}
+
+// --- Render ---
+function render() {
+  var board = document.getElementById("board");
+  board.innerHTML = "";
+
+  var filtered = chats.filter(function(c) {
+    return filter === "all" || c.status === filter;
+  });
+
+  document.getElementById("f-count").textContent = filtered.length + " / " + chats.length + " chats";
+
+  if (filtered.length === 0) {
+    board.innerHTML = '<div class="empty"><div class="e-icon">&#x1F680;</div><div class="e-title">' +
+      (chats.length === 0 ? "No chats yet" : "No chats match this filter") +
+      '</div><div class="e-sub">Type a chat name in the bar above and hit Enter. Chats appear instantly and are ready to action.</div></div>';
+    updateStats();
+    return;
+  }
+
+  filtered.forEach(function(c) {
+    var card = document.createElement("div");
+    card.className = "card" + (expandedId === c.id ? " expanded" : "");
+    card.dataset.id = c.id;
+
+    var entryCount = c.log ? c.log.length : 0;
+
+    // Main row
+    card.innerHTML =
+      '<div class="card-main">' +
+        '<div class="card-status-dot ' + c.status + '" title="Click to cycle status" data-action="cycle"></div>' +
+        '<div class="card-info" data-action="toggle">' +
+          '<div class="card-name">' + esc(c.name) + '</div>' +
+          '<div class="card-meta"><span class="cat">' + esc(c.category) + '</span><span>' + entryCount + ' entries</span><span>' + esc(c.updated) + '</span></div>' +
+        '</div>' +
+        '<div class="card-actions">' +
+          '<button class="status-badge ' + c.status + '" data-action="cycle" title="Click to change status">' + c.status + '</button>' +
+          '<button data-action="export" title="Export log">&#x1F4E5;</button>' +
+          '<button data-action="dupe" title="Duplicate">&#x1F4CB;</button>' +
+          '<button class="btn-remove" data-action="remove" title="Remove chat">&#x2715;</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card-detail">' +
+        '<div class="detail-desc" contenteditable="true" data-action="desc" placeholder="Add description...">' + esc(c.description) + '</div>' +
+        '<div class="log-list" id="log-' + c.id + '">' + renderLogHTML(c) + '</div>' +
+        '<div class="detail-input">' +
+          '<input type="text" data-action="log-input" placeholder="Add log entry... (prefix: tool: file: error: thinking: user:)"/>' +
+          '<button data-action="log-add">Add</button>' +
+        '</div>' +
+        '<div class="detail-actions">' +
+          '<button data-action="clear-log">Clear Log</button>' +
+          '<button data-action="export">Export Markdown</button>' +
+          '<button class="da-danger" data-action="remove">Remove Chat</button>' +
+        '</div>' +
+      '</div>';
+
+    board.appendChild(card);
+  });
+
+  // Wire up events via delegation
+  board.onclick = function(e) {
+    var btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    var card = btn.closest(".card");
+    if (!card) return;
+    var cid = card.dataset.id;
+    var action = btn.dataset.action;
+
+    if (action === "cycle") { cycleStatus(cid); }
+    else if (action === "toggle") { expandedId = (expandedId === cid) ? null : cid; render(); }
+    else if (action === "remove") { removeChat(cid); }
+    else if (action === "export") { exportChat(cid); }
+    else if (action === "dupe") { dupeChat(cid); }
+    else if (action === "clear-log") {
+      var ch = find(cid);
+      if (ch) { ch.log = []; ch.updated = now(); save(); render(); toast("Log cleared"); }
+    }
+    else if (action === "log-add") {
+      var inp = card.querySelector("[data-action='log-input']");
+      if (inp && inp.value.trim()) { addLog(cid, inp.value.trim()); }
+    }
+  };
+
+  // Enter key on log inputs
+  board.onkeydown = function(e) {
+    if (e.key === "Enter") {
+      var inp = e.target.closest("[data-action='log-input']");
+      if (inp) {
+        e.preventDefault();
+        var card = inp.closest(".card");
+        if (card && inp.value.trim()) { addLog(card.dataset.id, inp.value.trim()); }
+      }
+    }
+  };
+
+  // Description blur save
+  board.addEventListener("focusout", function(e) {
+    if (e.target.dataset && e.target.dataset.action === "desc") {
+      var card = e.target.closest(".card");
+      if (card) {
+        var ch = find(card.dataset.id);
+        if (ch) { ch.description = e.target.textContent.trim(); ch.updated = now(); save(); }
+      }
+    }
+  });
+
+  // Scroll expanded log to bottom
+  if (expandedId) {
+    var logEl = document.getElementById("log-" + expandedId);
+    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+    var inp = document.querySelector(".card.expanded [data-action='log-input']");
+    if (inp) inp.focus();
+  }
+
+  updateStats();
+}
+
+function renderLogHTML(c) {
+  if (!c.log || c.log.length === 0) return '<div style="font-size:.75rem;color:#333;padding:8px 0;">No entries yet. Add one below.</div>';
+  return c.log.map(function(l) {
+    return '<div class="log-item"><span class="lt">' + esc(l.t) + '</span><span class="ltag ' + l.tag + '">' + l.tag + '</span><span class="ltext">' + esc(l.text) + '</span></div>';
+  }).join("");
+}
+
+function updateStats() {
+  var r=0, p=0, d=0, e=0;
+  chats.forEach(function(c) {
+    if(c.status==="running") r++;
+    else if(c.status==="paused") p++;
+    else if(c.status==="completed") d++;
+    c.log && (e += c.log.length);
+  });
+  document.getElementById("s-total").textContent = chats.length;
+  document.getElementById("s-run").textContent = r;
+  document.getElementById("s-pause").textContent = p;
+  document.getElementById("s-done").textContent = d;
+  document.getElementById("s-entries").textContent = e;
+}
+
+// --- Quick add bar ---
+document.getElementById("qa-btn").onclick = function() {
+  var inp = document.getElementById("qa-name");
+  addChat(inp.value.trim(), document.getElementById("qa-cat").value);
+  inp.value = "";
+  inp.focus();
+};
+
+document.getElementById("qa-name").onkeydown = function(e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addChat(this.value.trim(), document.getElementById("qa-cat").value);
+    this.value = "";
+  }
+};
+
+// --- Filters ---
+document.getElementById("filters").onclick = function(e) {
+  var btn = e.target.closest(".f-btn");
+  if (!btn) return;
+  document.querySelectorAll(".f-btn").forEach(function(b){ b.classList.remove("active"); });
+  btn.classList.add("active");
+  filter = btn.dataset.f;
+  render();
+};
+
+// --- Clear all ---
+document.getElementById("clear-all-btn").onclick = function() {
+  if (!confirm("Remove ALL chats? This cannot be undone.")) return;
+  chats = [];
+  expandedId = null;
+  save();
+  render();
+  toast("All chats cleared");
+};
+
+// --- Clock ---
+function tick() {
+  document.getElementById("clock").textContent = new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
+setInterval(tick, 1000); tick();
+
+// --- Keyboard shortcuts ---
+document.onkeydown = function(e) {
+  // Ctrl+N = focus quick-add
+  if (e.ctrlKey && e.key === "n") { e.preventDefault(); document.getElementById("qa-name").focus(); }
+};
+
+// --- Init ---
+load();
+render();
+</script>
+
+<div style="height:36px;"></div><!-- spacer for fixed stats bar -->
+</body>
+</html>
