@@ -226,13 +226,10 @@ function fmtHrs(h){if(h<0)h=0;var totalMin=Math.round(h*60);var hh=Math.floor(to
 
 function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove("show")},1800)}
 
-// --- Work timer ---
-function startWork(){if(!dayMetrics.working){dayMetrics.working=true;dayMetrics.session_start=Date.now();saveMetrics()}}
-function pauseWork(){if(dayMetrics.working&&dayMetrics.session_start){dayMetrics.total_work_ms+=Date.now()-dayMetrics.session_start;dayMetrics.session_start=null;dayMetrics.working=false;saveMetrics()}}
-function currentWorkMs(){var base=dayMetrics.total_work_ms;if(dayMetrics.working&&dayMetrics.session_start)base+=Date.now()-dayMetrics.session_start;return base}
-
-// Auto-start timer when any chat is running
-function checkAutoTimer(){var anyRunning=chats.some(function(c){return c.status==="running"});if(anyRunning&&!dayMetrics.working)startWork();else if(!anyRunning&&dayMetrics.working)pauseWork()}
+// --- Work timer: time since midnight EST ---
+function midnightEST(){var d=new Date();var est=new Date(d.toLocaleString("en-US",{timeZone:"America/New_York"}));est.setHours(0,0,0,0);var diff=d-est;return diff>0?diff:0}
+function currentWorkMs(){return midnightEST()}
+function checkAutoTimer(){}
 
 function unansweredCount(c){if(!c.messages)return 0;var n=0;for(var i=c.messages.length-1;i>=0;i--){if(c.messages[i].type==="question")n++;else if(c.messages[i].type==="answer")break}return n}
 function migrate(c){if(!c.messages){c.messages=[];if(c.log)c.log.forEach(function(l){c.messages.push({id:gid(),type:"note",text:"["+l.tag+"] "+l.text,time:l.t})})}if(!c.humanHrs)c.humanHrs=8;return c}
