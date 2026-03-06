@@ -222,7 +222,7 @@ function time(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"
 function find(id){for(var i=0;i<chats.length;i++)if(chats[i].id===id)return chats[i];return null}
 function esc(s){if(!s)return"";var d=document.createElement("div");d.textContent=s;return d.innerHTML}
 function fmtMs(ms){var h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000);return h+"h "+m+"m"}
-function fmtHrs(h){return h<1?(Math.round(h*60))+"m":h.toFixed(1)+"h"}
+function fmtHrs(h){var totalMin=Math.round(h*60);var hh=Math.floor(totalMin/60),mm=totalMin%60;return hh+"h "+mm+"m"}
 
 function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove("show")},1800)}
 
