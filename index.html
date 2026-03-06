@@ -87,7 +87,7 @@ header { background: #161822; border-bottom: 1px solid #2a2d3a; padding: 14px 24
 .msg.question .msg-label { font-size: .62rem; font-weight: 600; color: #fdcb6e; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
 .msg.question.unanswered { border-color: #fdcb6e55; background: #fdcb6e08; }
 
-/* Answer — right-aligned, purple */
+/* Answer — right-aligned, green */
 .msg.answer { align-self: flex-end; background: #3D6B4F; color: #e8f0ec; border-bottom-right-radius: 4px; }
 .msg.answer .msg-label { font-size: .62rem; font-weight: 600; color: #a8d4b8; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
 .msg.answer .msg-time { color: #a8d4b888; }
@@ -136,6 +136,37 @@ header { background: #161822; border-bottom: 1px solid #2a2d3a; padding: 14px 24
 /* Toast */
 .toast { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); background: #3D6B4F; color: #fff; padding: 8px 20px; border-radius: 8px; font-size: .8rem; font-weight: 600; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 200; }
 .toast.show { opacity: 1; }
+
+/* Live feed indicator */
+.live-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.live-dot.connected { background: #00b894; animation: pulse-live 2s infinite; }
+.live-dot.disconnected { background: #d63363; }
+.live-dot.off { background: #555; }
+@keyframes pulse-live { 0%,100%{opacity:1} 50%{opacity:.4} }
+.live-label { font-size: .72rem; color: #666; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #2a2d3a; border-radius: 6px; }
+.live-label:hover { border-color: #6FA184; color: #aaa; }
+
+/* Config panel */
+.config-panel { display: none; position: fixed; top: 56px; right: 16px; background: #1e2030; border: 1px solid #2a2d3a; border-radius: 12px; padding: 20px; z-index: 150; width: 420px; box-shadow: 0 8px 32px #0008; }
+.config-panel.open { display: block; }
+.config-panel h3 { font-size: .95rem; margin-bottom: 14px; color: #e0e0e0; }
+.config-panel label { display: block; font-size: .75rem; color: #888; margin-bottom: 4px; margin-top: 12px; }
+.config-panel input { width: 100%; background: #161822; border: 1px solid #2a2d3a; border-radius: 6px; padding: 8px 10px; color: #e0e0e0; font-size: .82rem; outline: none; font-family: 'Cascadia Code', 'Fira Code', monospace; }
+.config-panel input:focus { border-color: #6FA184; }
+.config-panel .cfg-row { display: flex; gap: 8px; margin-top: 14px; }
+.config-panel .cfg-row button { padding: 8px 16px; border-radius: 6px; border: none; font-size: .8rem; cursor: pointer; font-weight: 600; }
+.config-panel .cfg-save { background: #6FA184; color: #fff; }
+.config-panel .cfg-save:hover { background: #4F8665; }
+.config-panel .cfg-cancel { background: #2a2d3a; color: #aaa; }
+.config-panel .cfg-cancel:hover { background: #363a4a; }
+.config-panel .helper-box { background: #161822; border: 1px solid #2a2d3a; border-radius: 6px; padding: 10px 12px; margin-top: 10px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: .72rem; color: #6FA184; line-height: 1.6; cursor: pointer; position: relative; word-break: break-all; }
+.config-panel .helper-box:hover { border-color: #6FA184; }
+.config-panel .helper-box .copy-hint { position: absolute; top: 4px; right: 8px; font-size: .6rem; color: #555; }
+.config-panel .helper-note { font-size: .68rem; color: #555; margin-top: 6px; line-height: 1.4; }
+
+/* Incoming flash */
+@keyframes flash-in { 0%{background:#fdcb6e22} 100%{background:transparent} }
+.card.flash-in { animation: flash-in 1.5s ease-out; }
 </style>
 </head>
 <body>
@@ -146,10 +177,40 @@ header { background: #161822; border-bottom: 1px solid #2a2d3a; padding: 14px 24
     <div class="subtitle">Development Chat Management</div>
   </div>
   <div class="header-right">
+    <div class="live-label" id="live-toggle" title="Click to configure live feed">
+      <span class="live-dot off" id="live-dot"></span>
+      <span id="live-text">Feed Off</span>
+    </div>
     <span class="clock" id="clock"></span>
     <button class="clear-all" id="clear-all-btn">Clear All</button>
   </div>
 </header>
+
+<div class="config-panel" id="config-panel">
+  <h3>Live Feed Configuration</h3>
+  <label>ntfy.sh Topic (your secret channel name)</label>
+  <input type="text" id="cfg-topic" placeholder="e.g. stackryn-cc-nick-secret123"/>
+  <div class="helper-note">Pick something unique and hard to guess. This is your private channel.</div>
+
+  <label style="margin-top:16px;">Push a question from any terminal:</label>
+  <div class="helper-box" id="helper-cmd" title="Click to copy">
+    <span class="copy-hint">click to copy</span>
+    curl -d "ChatName|Your question here" ntfy.sh/<span id="helper-topic">your-topic</span>
+  </div>
+
+  <label style="margin-top:12px;">Or use this bash function (add to .bashrc):</label>
+  <div class="helper-box" id="helper-func" title="Click to copy">
+    <span class="copy-hint">click to copy</span>
+    sq() { curl -s -d "$1|$2" ntfy.sh/<span id="helper-topic2">your-topic</span> > /dev/null && echo "Sent"; }
+    <br/>
+    # Usage: sq "Auth RLS" "Should I bypass service_role?"
+  </div>
+
+  <div class="cfg-row">
+    <button class="cfg-cancel" id="cfg-cancel">Cancel</button>
+    <button class="cfg-save" id="cfg-save">Save &amp; Connect</button>
+  </div>
+</div>
 
 <div class="quick-add">
   <input type="text" id="qa-name" placeholder="Chat name - type and hit Enter to add..." autofocus/>
@@ -548,9 +609,209 @@ document.addEventListener("keydown", function(e) {
   if (e.ctrlKey && e.key === "n") { e.preventDefault(); document.getElementById("qa-name").focus(); }
 });
 
+// =============================================
+// LIVE FEED — ntfy.sh SSE integration
+// =============================================
+
+var NTFY_KEY = "stackryn_cc_ntfy";
+var ntfyTopic = "";
+var evtSource = null;
+
+function loadNtfy() {
+  ntfyTopic = localStorage.getItem(NTFY_KEY) || "";
+}
+
+function saveNtfy() {
+  localStorage.setItem(NTFY_KEY, ntfyTopic);
+}
+
+function updateLiveUI() {
+  var dot = document.getElementById("live-dot");
+  var text = document.getElementById("live-text");
+  if (!ntfyTopic) {
+    dot.className = "live-dot off";
+    text.textContent = "Feed Off";
+  } else if (evtSource && evtSource.readyState === EventSource.OPEN) {
+    dot.className = "live-dot connected";
+    text.textContent = "Live";
+  } else if (evtSource && evtSource.readyState === EventSource.CONNECTING) {
+    dot.className = "live-dot disconnected";
+    text.textContent = "Connecting...";
+  } else {
+    dot.className = "live-dot disconnected";
+    text.textContent = "Disconnected";
+  }
+}
+
+function connectNtfy() {
+  disconnectNtfy();
+  if (!ntfyTopic) { updateLiveUI(); return; }
+
+  var url = "https://ntfy.sh/" + encodeURIComponent(ntfyTopic) + "/sse";
+  evtSource = new EventSource(url);
+
+  evtSource.onopen = function() {
+    updateLiveUI();
+    toast("Live feed connected");
+  };
+
+  evtSource.onerror = function() {
+    updateLiveUI();
+  };
+
+  evtSource.onmessage = function(evt) {
+    try {
+      var data = JSON.parse(evt.data);
+      if (data.event !== "message") return;
+      var raw = data.message || "";
+      handleIncoming(raw);
+    } catch(e) {}
+  };
+
+  updateLiveUI();
+}
+
+function disconnectNtfy() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  updateLiveUI();
+}
+
+function handleIncoming(raw) {
+  // Format: "ChatName|Question text" or just "Question text" (goes to first running chat)
+  var parts = raw.split("|");
+  var chatName, questionText;
+
+  if (parts.length >= 2) {
+    chatName = parts[0].trim();
+    questionText = parts.slice(1).join("|").trim();
+  } else {
+    chatName = null;
+    questionText = raw.trim();
+  }
+
+  if (!questionText) return;
+
+  // Find or create the chat
+  var target = null;
+  if (chatName) {
+    // Fuzzy match by name (case-insensitive)
+    var lower = chatName.toLowerCase();
+    for (var i = 0; i < chats.length; i++) {
+      if (chats[i].name.toLowerCase() === lower) { target = chats[i]; break; }
+    }
+    // Partial match
+    if (!target) {
+      for (var i = 0; i < chats.length; i++) {
+        if (chats[i].name.toLowerCase().indexOf(lower) !== -1) { target = chats[i]; break; }
+      }
+    }
+    // Create new chat if not found
+    if (!target) {
+      target = { id: gid(), name: chatName, category: "feature", status: "running", created: now(), updated: now(), messages: [] };
+      chats.unshift(target);
+    }
+  } else {
+    // No chat name — use first running chat, or create "Unassigned"
+    for (var i = 0; i < chats.length; i++) {
+      if (chats[i].status === "running") { target = chats[i]; break; }
+    }
+    if (!target) {
+      target = { id: gid(), name: "Incoming", category: "feature", status: "running", created: now(), updated: now(), messages: [] };
+      chats.unshift(target);
+    }
+  }
+
+  migrate(target);
+  target.messages.push({ id: gid(), type: "question", text: questionText, time: time() });
+  target.updated = now();
+  inputModes[target.id] = "answer";
+  save();
+
+  // Auto-expand the card that just got a question
+  expandedId = target.id;
+  render();
+
+  // Flash + sound
+  toast("New question in: " + target.name);
+  playNotifSound();
+
+  // Flash the card
+  setTimeout(function() {
+    var el = document.querySelector('.card[data-id="' + target.id + '"]');
+    if (el) { el.classList.add("flash-in"); }
+  }, 50);
+}
+
+function playNotifSound() {
+  // Short beep via Web Audio API
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = "sine";
+    gain.gain.value = 0.15;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+// --- Config panel ---
+document.getElementById("live-toggle").onclick = function() {
+  var panel = document.getElementById("config-panel");
+  panel.classList.toggle("open");
+  if (panel.classList.contains("open")) {
+    document.getElementById("cfg-topic").value = ntfyTopic;
+    updateHelperDisplay();
+  }
+};
+
+function updateHelperDisplay() {
+  var topic = document.getElementById("cfg-topic").value.trim() || "your-topic";
+  document.getElementById("helper-topic").textContent = topic;
+  document.getElementById("helper-topic2").textContent = topic;
+}
+
+document.getElementById("cfg-topic").oninput = updateHelperDisplay;
+
+document.getElementById("cfg-save").onclick = function() {
+  ntfyTopic = document.getElementById("cfg-topic").value.trim();
+  saveNtfy();
+  document.getElementById("config-panel").classList.remove("open");
+  connectNtfy();
+};
+
+document.getElementById("cfg-cancel").onclick = function() {
+  document.getElementById("config-panel").classList.remove("open");
+};
+
+// Copy helper commands on click
+document.getElementById("helper-cmd").onclick = function() {
+  var topic = document.getElementById("cfg-topic").value.trim() || "your-topic";
+  copyText('curl -d "ChatName|Your question here" ntfy.sh/' + topic);
+};
+document.getElementById("helper-func").onclick = function() {
+  var topic = document.getElementById("cfg-topic").value.trim() || "your-topic";
+  copyText('sq() { curl -s -d "$1|$2" ntfy.sh/' + topic + ' > /dev/null && echo "Sent"; }\n# Usage: sq "Auth RLS" "Should I bypass service_role?"');
+};
+
+// Close config on outside click
+document.addEventListener("click", function(e) {
+  var panel = document.getElementById("config-panel");
+  var toggle = document.getElementById("live-toggle");
+  if (panel.classList.contains("open") && !panel.contains(e.target) && !toggle.contains(e.target)) {
+    panel.classList.remove("open");
+  }
+});
+
 // --- Init ---
 load();
+loadNtfy();
 render();
+if (ntfyTopic) connectNtfy();
 </script>
 
 <div style="height:36px;"></div>
