@@ -226,10 +226,29 @@ function fmtHrs(h){if(h<0)h=0;var totalMin=Math.round(h*60);var hh=Math.floor(to
 
 function toast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove("show")},1800)}
 
-// --- Work timer: time since midnight EST ---
-function midnightEST(){var d=new Date();var est=new Date(d.toLocaleString("en-US",{timeZone:"America/New_York"}));est.setHours(0,0,0,0);var diff=d-est;return diff>0?diff:0}
-function currentWorkMs(){return midnightEST()}
+// --- Work timer: activity-based tracking ---
+// Counts time when you're actively working (interactions, incoming questions, status changes)
+// Stops counting after 5 min idle. Resets at midnight EST.
+var IDLE_TIMEOUT=5*60*1000; // 5 min
+var lastActivity=0;
+function markActive(){lastActivity=Date.now();if(!dayMetrics.working){dayMetrics.working=true;dayMetrics.session_start=Date.now();saveMetrics()}}
+function tickTimer(){
+  if(!dayMetrics.working)return;
+  var idle=Date.now()-lastActivity;
+  if(idle>=IDLE_TIMEOUT){
+    // Capture time up to last activity, then pause
+    if(dayMetrics.session_start){
+      dayMetrics.total_work_ms+=lastActivity-dayMetrics.session_start;
+      dayMetrics.session_start=null;
+    }
+    dayMetrics.working=false;saveMetrics()
+  }
+}
+function currentWorkMs(){var base=dayMetrics.total_work_ms;if(dayMetrics.working&&dayMetrics.session_start)base+=Date.now()-dayMetrics.session_start;return base}
 function checkAutoTimer(){}
+// Activity listeners
+document.addEventListener("click",markActive);document.addEventListener("keydown",markActive);
+setInterval(tickTimer,15000); // check idle every 15s
 
 function unansweredCount(c){if(!c.messages)return 0;var n=0;for(var i=c.messages.length-1;i>=0;i--){if(c.messages[i].type==="question")n++;else if(c.messages[i].type==="answer")break}return n}
 function migrate(c){if(!c.messages){c.messages=[];if(c.log)c.log.forEach(function(l){c.messages.push({id:gid(),type:"note",text:"["+l.tag+"] "+l.text,time:l.t})})}if(!c.humanHrs)c.humanHrs=8;return c}
@@ -412,7 +431,7 @@ function saveNtfy(){localStorage.setItem(NTFY_KEY,ntfyTopic)}
 function updateLiveUI(){var d=document.getElementById("live-dot"),t=document.getElementById("live-text");if(!ntfyTopic){d.className="live-dot off";t.textContent="Feed Off"}else if(evtSource&&evtSource.readyState===EventSource.OPEN){d.className="live-dot connected";t.textContent="Live"}else if(evtSource&&evtSource.readyState===EventSource.CONNECTING){d.className="live-dot disconnected";t.textContent="Connecting..."}else{d.className="live-dot disconnected";t.textContent="Disconnected"}}
 function connectNtfy(){disconnectNtfy();if(!ntfyTopic){updateLiveUI();return}evtSource=new EventSource("https://ntfy.sh/"+encodeURIComponent(ntfyTopic)+"/sse");evtSource.onopen=function(){updateLiveUI();toast("Live feed connected")};evtSource.onerror=function(){updateLiveUI()};evtSource.onmessage=function(evt){try{var data=JSON.parse(evt.data);if(data.event!=="message")return;handleIncoming(data.message||"")}catch(e){}};updateLiveUI()}
 function disconnectNtfy(){if(evtSource){evtSource.close();evtSource=null}updateLiveUI()}
-function handleIncoming(raw){var parts=raw.split("|"),chatName,qText;if(parts.length>=2){chatName=parts[0].trim();qText=parts.slice(1).join("|").trim()}else{chatName=null;qText=raw.trim()}if(!qText)return;var target=null;if(chatName){var lower=chatName.toLowerCase();for(var i=0;i<chats.length;i++)if(chats[i].name.toLowerCase()===lower){target=chats[i];break}if(!target)for(var i=0;i<chats.length;i++)if(chats[i].name.toLowerCase().indexOf(lower)!==-1){target=chats[i];break}if(!target){target={id:gid(),name:chatName,category:"feature",status:"running",created:now(),updated:now(),messages:[],humanHrs:8,startedAt:Date.now()};chats.unshift(target)}}else{for(var i=0;i<chats.length;i++)if(chats[i].status==="running"){target=chats[i];break}if(!target){target={id:gid(),name:"Incoming",category:"feature",status:"running",created:now(),updated:now(),messages:[],humanHrs:8,startedAt:Date.now()};chats.unshift(target)}}migrate(target);target.messages.push({id:gid(),type:"question",text:qText,time:time()});target.updated=now();inputModes[target.id]="answer";save();render();toast("New Q: "+target.name);checkAutoTimer();try{var ctx=new(window.AudioContext||window.webkitAudioContext)(),osc=ctx.createOscillator(),g=ctx.createGain();osc.connect(g);g.connect(ctx.destination);osc.frequency.value=880;osc.type="sine";g.gain.value=.15;osc.start();g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.3);osc.stop(ctx.currentTime+.3)}catch(e){}}
+function handleIncoming(raw){markActive();var parts=raw.split("|"),chatName,qText;if(parts.length>=2){chatName=parts[0].trim();qText=parts.slice(1).join("|").trim()}else{chatName=null;qText=raw.trim()}if(!qText)return;var target=null;if(chatName){var lower=chatName.toLowerCase();for(var i=0;i<chats.length;i++)if(chats[i].name.toLowerCase()===lower){target=chats[i];break}if(!target)for(var i=0;i<chats.length;i++)if(chats[i].name.toLowerCase().indexOf(lower)!==-1){target=chats[i];break}if(!target){target={id:gid(),name:chatName,category:"feature",status:"running",created:now(),updated:now(),messages:[],humanHrs:8,startedAt:Date.now()};chats.unshift(target)}}else{for(var i=0;i<chats.length;i++)if(chats[i].status==="running"){target=chats[i];break}if(!target){target={id:gid(),name:"Incoming",category:"feature",status:"running",created:now(),updated:now(),messages:[],humanHrs:8,startedAt:Date.now()};chats.unshift(target)}}migrate(target);target.messages.push({id:gid(),type:"question",text:qText,time:time()});target.updated=now();inputModes[target.id]="answer";save();render();toast("New Q: "+target.name);checkAutoTimer();try{var ctx=new(window.AudioContext||window.webkitAudioContext)(),osc=ctx.createOscillator(),g=ctx.createGain();osc.connect(g);g.connect(ctx.destination);osc.frequency.value=880;osc.type="sine";g.gain.value=.15;osc.start();g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.3);osc.stop(ctx.currentTime+.3)}catch(e){}}
 
 // Config panel
 document.getElementById("live-toggle").onclick=function(){var p=document.getElementById("config-panel");p.classList.toggle("open");if(p.classList.contains("open")){document.getElementById("cfg-topic").value=ntfyTopic||"stackryn-cc-nick";document.getElementById("helper-topic").textContent=ntfyTopic||"stackryn-cc-nick"}};
@@ -425,7 +444,7 @@ document.addEventListener("click",function(e){var p=document.getElementById("con
 // --- Init ---
 load();loadMetrics();loadNtfy();
 if(!ntfyTopic){var dt=document.getElementById("cfg-topic").value.trim();if(dt){ntfyTopic=dt;saveNtfy()}}
-render();checkAutoTimer();
+markActive();render();
 if(ntfyTopic)connectNtfy();
 </script>
 </body>
