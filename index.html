@@ -810,6 +810,14 @@ document.addEventListener("click", function(e) {
 // --- Init ---
 load();
 loadNtfy();
+// Auto-connect with default topic if nothing saved yet
+if (!ntfyTopic) {
+  var defaultTopic = document.getElementById("cfg-topic").value.trim();
+  if (defaultTopic) {
+    ntfyTopic = defaultTopic;
+    saveNtfy();
+  }
+}
 render();
 if (ntfyTopic) connectNtfy();
 </script>
