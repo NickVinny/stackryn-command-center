@@ -190,9 +190,6 @@ header{background:#161822;border-bottom:1px solid #2a2d3a;padding:8px 16px;displ
   <input type="text" id="cfg-topic" value="stackryn-cc-nick"/>
   <label style="margin-top:10px">Push from terminal:</label>
   <div class="helper-box" id="helper-cmd"><span class="ch">copy</span>curl -d "ChatName|Question" ntfy.sh/<span id="helper-topic">stackryn-cc-nick</span></div>
-  <label style="margin-top:12px">Linear API Key</label>
-  <input type="password" id="cfg-linear" placeholder="lin_api_..."/>
-  <div class="helper-note">Enables ticket activity in metrics. Stored in localStorage only.</div>
   <div class="cfg-row">
     <button class="cfg-cancel" id="cfg-cancel">Cancel</button>
     <button class="cfg-save" id="cfg-save">Save &amp; Connect</button>
@@ -456,9 +453,7 @@ function handleIncoming(raw){markActive();var parts=raw.split("|"),chatName,qTex
 // =============================================
 // LINEAR INTEGRATION
 // =============================================
-var LINEAR_KEY_STORE="stackryn_cc_linear",linearApiKey="",linearData=null,linearLoading=false,linearError="";
-function loadLinearKey(){linearApiKey=localStorage.getItem(LINEAR_KEY_STORE)||""}
-function saveLinearKey(){localStorage.setItem(LINEAR_KEY_STORE,linearApiKey)}
+var linearApiKey="lin_api_NdqHRX0XBeOua6GYd4tD4qHrAqFNBZhZbItJV79P"
 
 function fetchLinearActivity(){
   if(!linearApiKey){linearData=null;renderMetrics();return}
@@ -491,7 +486,6 @@ function fetchLinearActivity(){
 }
 
 function renderLinearSection(){
-  if(!linearApiKey)return'<div class="m-section linear"><div class="m-title">Linear Activity</div><div class="m-linear-err">Add API key in settings</div></div>';
   if(linearLoading)return'<div class="m-section linear"><div class="m-title">Linear Activity</div><div class="m-linear-loading">Loading...</div></div>';
   if(linearError)return'<div class="m-section linear"><div class="m-title">Linear Activity</div><div class="m-linear-err">'+esc(linearError)+'</div></div>';
   if(!linearData)return'<div class="m-section linear"><div class="m-title">Linear Activity</div><div style="font-size:.62rem;color:#333">No data</div></div>';
@@ -521,15 +515,15 @@ function renderLinearSection(){
 }
 
 // Config panel
-document.getElementById("live-toggle").onclick=function(){var p=document.getElementById("config-panel");p.classList.toggle("open");if(p.classList.contains("open")){document.getElementById("cfg-topic").value=ntfyTopic||"stackryn-cc-nick";document.getElementById("helper-topic").textContent=ntfyTopic||"stackryn-cc-nick";document.getElementById("cfg-linear").value=linearApiKey||""}};
+document.getElementById("live-toggle").onclick=function(){var p=document.getElementById("config-panel");p.classList.toggle("open");if(p.classList.contains("open")){document.getElementById("cfg-topic").value=ntfyTopic||"stackryn-cc-nick";document.getElementById("helper-topic").textContent=ntfyTopic||"stackryn-cc-nick"}};
 document.getElementById("cfg-topic").oninput=function(){document.getElementById("helper-topic").textContent=this.value.trim()||"your-topic"};
-document.getElementById("cfg-save").onclick=function(){ntfyTopic=document.getElementById("cfg-topic").value.trim();saveNtfy();linearApiKey=document.getElementById("cfg-linear").value.trim();saveLinearKey();document.getElementById("config-panel").classList.remove("open");connectNtfy();fetchLinearActivity()};
+document.getElementById("cfg-save").onclick=function(){ntfyTopic=document.getElementById("cfg-topic").value.trim();saveNtfy();document.getElementById("config-panel").classList.remove("open");connectNtfy()};
 document.getElementById("cfg-cancel").onclick=function(){document.getElementById("config-panel").classList.remove("open")};
 document.getElementById("helper-cmd").onclick=function(){copyText('curl -d "ChatName|Question" ntfy.sh/'+(ntfyTopic||"your-topic"))};
 document.addEventListener("click",function(e){var p=document.getElementById("config-panel"),t=document.getElementById("live-toggle");if(p.classList.contains("open")&&!p.contains(e.target)&&!t.contains(e.target))p.classList.remove("open")});
 
 // --- Init ---
-load();loadMetrics();loadNtfy();loadLinearKey();
+load();loadMetrics();loadNtfy();
 if(!ntfyTopic){var dt=document.getElementById("cfg-topic").value.trim();if(dt){ntfyTopic=dt;saveNtfy()}}
 markActive();render();
 if(ntfyTopic)connectNtfy();
